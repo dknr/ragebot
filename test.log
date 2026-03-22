@@ -1,0 +1,13 @@
+2026-02-25 19:34:53,541 - asyncio - DEBUG - Using selector: EpollSelector
+2026-02-25 19:34:53,541 - root - INFO - Creating mock Telegram update...
+2026-02-25 19:34:53,542 - root - INFO - Calling handler with mock update...
+2026-02-25 19:34:53,542 - root - INFO - ============================================================
+2026-02-25 19:34:53,542 - root - INFO - HANDLER CALLED!
+2026-02-25 19:34:53,542 - root - INFO - Update type: <class 'unittest.mock.Mock'>
+2026-02-25 19:34:53,542 - root - INFO - Update: <Mock spec='Update' id='139621594368048'>
+2026-02-25 19:34:53,542 - root - INFO - Message: <Mock name='mock.message' id='139621594368384'>
+2026-02-25 19:34:53,543 - root - INFO - Text: Test message from user
+2026-02-25 19:34:53,543 - root - INFO - Chat ID: 123456
+2026-02-25 19:34:53,543 - root - INFO - User: testuser
+2026-02-25 19:34:53,543 - root - INFO - ============================================================
+2026-02-25 19:34:53,543 - root - INFO - Test complete!

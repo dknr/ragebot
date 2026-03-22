@@ -1,0 +1,9 @@
+venv/
+*.pyc
+__pycache__/
+ragebot.db
+*.onnxlog/
+log/
+assets/
+.env
+torch/
