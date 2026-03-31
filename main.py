@@ -490,6 +490,8 @@ async def minimal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lol_matches = re.findall(r'\b(lol|lmao|rofl|haha)\b', text, re.IGNORECASE)
         lol_count = len(lol_matches)
         is_neat = bool(re.search(r'\bneat[!\.]*\b', text, re.IGNORECASE))
+        truncated_text = text[:160] if len(text) > 160 else text
+
 
         # Check for NEAT! pattern (case-insensitive, catches "neat", "neat!", "neat.", etc.)
         if is_neat:
@@ -516,7 +518,7 @@ async def minimal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.info("No neat GIFs available, skipping")
         if "sentiment_pipeline" in context.application.bot_data:
             try:
-                sentiment_result = context.application.bot_data["sentiment_pipeline"](update.message.text)
+                sentiment_result = context.application.bot_data["sentiment_pipeline"](truncated_text)
                 sentiment_label = sentiment_result[0]["label"]
                 sentiment_score = sentiment_result[0]["score"]
                 logging.debug(f"Sentiment: {sentiment_label} (score: {sentiment_score:.4f})")
@@ -525,7 +527,7 @@ async def minimal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 irony_score = 0
                 if "irony_pipeline" in context.application.bot_data:
                     try:
-                        irony_result = context.application.bot_data["irony_pipeline"](update.message.text)
+                        irony_result = context.application.bot_data["irony_pipeline"](truncated_text)
                         # Get highest irony score
                         irony_scores = [r['score'] for r in irony_result]
                         irony_score = max(irony_scores) if irony_scores else 0
