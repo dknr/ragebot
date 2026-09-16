@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -305,6 +306,25 @@ func main() {
 			log.Error().Err(err).Stringer("room_id", evt.RoomID).Msg("Failed to join room after invite")
 		} else {
 			log.Info().Stringer("room_id", evt.RoomID).Msg("Joined room after invite")
+		}
+	})
+
+	// React with a lizard emoji to every incoming message whose body mentions
+	// "lizard". Skip our own sends to avoid reacting to ourselves.
+	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
+		if evt.Sender == client.UserID {
+			return
+		}
+		body := evt.Content.AsMessage().Body
+		if !strings.Contains(strings.ToLower(body), "lizard") {
+			return
+		}
+		log.Debug().
+			Stringer("room_id", evt.RoomID).
+			Stringer("event_id", evt.ID).
+			Msg("Sending lizard reaction")
+		if _, err := client.SendReaction(ctx, evt.RoomID, evt.ID, "🦎"); err != nil {
+			log.Error().Err(err).Stringer("room_id", evt.RoomID).Stringer("event_id", evt.ID).Msg("Failed to send reaction")
 		}
 	})
 
