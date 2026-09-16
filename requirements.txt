@@ -1,4 +1,0 @@
-python-telegram-bot>=20.0
-torch>=2.0
-transformers>=4.30
-python-dotenv>=1.0

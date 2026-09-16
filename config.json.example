@@ -1,0 +1,8 @@
+{
+  "homeserver": "https://matrix.example.org",
+  "user": "@bot:example.org",
+  "password": "change-me",
+  "recovery_key": "",
+  "database": "ragebot.db",
+  "pickle_key": "ragebot"
+}

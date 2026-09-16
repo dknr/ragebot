@@ -1,59 +1,48 @@
-# RageBot
+# ragebot
 
-Sentiment Analysis Robot for Telegram
+A Matrix bot client built on [mautrix-go](https://maunium.net/go/mautrix) that:
 
+- Supports **E2EE** (Olm/Megolm via the mautrix crypto machine) and **device verification**
+  (auto-accepts incoming SAS verification requests).
+- **Auto-joins** rooms when invited.
+- **Logs every received event** (messages, invites, state, to-device, everything) with zerolog.
+- On startup: **logs in**, **verifies its own device** if necessary (with a recovery key or by
+  generating new cross-signing keys), and **signs out any other sessions**.
 
-## Installation
-Copy `.env.example` to `.env` and update with your token
-```bash
-cp .env.example .env
-# Edit .env and add your TELEGRAM_BOT_TOKEN
+## Building
+
+mautrix-go ships two olm implementations: the C `libolm` (needs the olm library) and the pure Go
+`goolm`. The build uses the `goolm` tag to avoid the cgo dependency:
+
+```sh
+make build   # or: go build -tags goolm -o ragebot .
 ```
 
-## Running Manually
+## Configuration
 
-```bash
-source venv/bin/activate
-python main.py
+Create `config.json` (or pass `-config <path>`):
+
+```json
+{
+  "homeserver": "https://matrix.example.org",
+  "user": "@bot:example.org",
+  "password": "change-me",
+  "recovery_key": "",
+  "database": "ragebot.db",
+  "pickle_key": "ragebot"
+}
 ```
 
-## Installing as System Service
+- `homeserver`, `user`, `password` are required.
+- `recovery_key` is optional. It is only needed when the bot's own device is not verified but
+  cross-signing keys already exist on the server (from a previous run). If it is empty and no
+  keys exist, the bot generates new cross-signing keys and **logs the new recovery key** on
+  startup — save it into the config for future runs.
+- `database` is the SQLite file for the crypto/state stores.
+- `pickle_key` encrypts the keys stored in the database.
 
-1. Install the systemd unit file:
+## Running
 
-```bash
-# Replace with your actual paths
-sed -i 's|{{RAGEBOT_DIR}}|/path/to/ragebot|g' ragebot.service
-sed -i 's|{{VENV_PATH}}|/path/to/ragebot/venv|g' ragebot.service
-
-sudo cp ragebot.service /etc/systemd/system/
-sudo systemctl daemon-reload
+```sh
+./ragebot -config config.json
 ```
-
-2. Start and enable the service:
-
-```bash
-sudo systemctl start ragebot
-sudo systemctl enable ragebot
-```
-
-3. Check service status:
-
-```bash
-sudo systemctl status ragebot
-journalctl -u ragebot -f
-```
-
-## Bot Commands
-
-- `/ragebot_start` - Show welcome message
-- `/ragebot_help` - Show help
-- `/ragebot_debug` - Toggle debug logging
-- `/ragebot_vibecheck` - Show last 24h statistics
-- `/ragebot_thresholds` - Show emoji thresholds
-- `/ragebot_clear_old` - Delete old messages from database
-- `/ragebot_die` - Stop the bot
-
-## License
-
-MIT

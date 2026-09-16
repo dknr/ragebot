@@ -1,9 +1,13 @@
-venv/
-*.pyc
-__pycache__/
-ragebot.db
-*.onnxlog/
-log/
-assets/
-.env
-torch/
+# Build output
+/ragebot
+
+# Runtime state
+*.db
+*.db-shm
+*.db-wal
+
+# Secrets: real config and environment values must never be committed
+config.json
+
+# Crush session data
+/.crush/
