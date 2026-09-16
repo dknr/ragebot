@@ -37,6 +37,9 @@ type Config struct {
 	PickleKey   string `json:"pickle_key"`
 }
 
+// senti is the shared sentiment analyzer, initialized at startup.
+var senti *analyzer
+
 func loadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -264,6 +267,14 @@ func main() {
 		log.Warn().Err(err).Msg("Failed to sign out other sessions")
 	}
 
+	// Load the embedded sentiment model and ONNX Runtime. The model is used to
+	// classify incoming message bodies; results are logged, not reacted to.
+	senti, err = newAnalyzer(512)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to load sentiment analyzer")
+	}
+	log.Info().Int("vocab", int(senti.tk.VocabSize())).Msg("Sentiment analyzer loaded")
+
 	// Accept incoming device verification requests (SAS).
 	cb := &verificationCallbacks{log: log}
 	vh := verificationhelper.NewVerificationHelper(client, mach, nil, cb, false, false, true)
@@ -307,6 +318,35 @@ func main() {
 		} else {
 			log.Info().Stringer("room_id", evt.RoomID).Msg("Joined room after invite")
 		}
+	})
+
+	// Run sentiment analysis on every incoming message and log the result.
+	// Skip our own sends so we do not re-analyze what we said.
+	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
+		if evt.Sender == client.UserID {
+			return
+		}
+		body := evt.Content.AsMessage().Body
+		if body == "" {
+			return
+		}
+		res, err := senti.classify(body)
+		if err != nil {
+			log.Error().Err(err).
+				Stringer("room_id", evt.RoomID).
+				Stringer("event_id", evt.ID).
+				Msg("Sentiment analysis failed")
+			return
+		}
+		log.Info().
+			Str("label", res.Label).
+			Float32("confidence", res.Confidence).
+			Any("scores", res.Scores).
+			Int("tokens", res.Tokens).
+			Float64("elapsed_ms", res.ElapsedMS).
+			Stringer("room_id", evt.RoomID).
+			Stringer("event_id", evt.ID).
+			Msg("Sentiment analysis")
 	})
 
 	// React with a lizard emoji to every incoming message whose body mentions

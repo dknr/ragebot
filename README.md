@@ -6,17 +6,29 @@ A Matrix bot client built on [mautrix-go](https://maunium.net/go/mautrix) that:
   (auto-accepts incoming SAS verification requests).
 - **Auto-joins** rooms when invited.
 - **Logs every received event** (messages, invites, state, to-device, everything) with zerolog.
+- **Runs sentiment analysis** on every incoming message body and logs the result
+  (negative/neutral/positive with confidence). No reactions are based on it yet.
 - On startup: **logs in**, **verifies its own device** if necessary (with a recovery key or by
   generating new cross-signing keys), and **signs out any other sessions**.
 
 ## Building
 
+The binary embeds the sentiment model, the tokenizer, and the ONNX Runtime shared library as
+compressed blobs (`blobs/*.zst`), so `ragebot` is a single self-contained binary.
+
 mautrix-go ships two olm implementations: the C `libolm` (needs the olm library) and the pure Go
-`goolm`. The build uses the `goolm` tag to avoid the cgo dependency:
+`goolm`. The build uses the `goolm` tag to avoid the cgo dependency for olm. The sentiment
+tokenizer (`github.com/daulet/tokenizers`) is a Rust crate linked via cgo, so the build needs
+`libtokenizers.a` on the link path:
 
 ```sh
-make build   # or: go build -tags goolm -o ragebot .
+make build   # CGO_LDFLAGS="-L$(CURDIR)" go build -tags goolm -o ragebot .
 ```
+
+`libtokenizers.a` and the `blobs/` are build output (gitignored). A clean checkout regenerates
+them with `make model`, `make ort`, and the `libtokenizers.a` target, which need Python 3 (torch +
+transformers + onnxruntime) and Rust/cargo. If a prebuilt `libtokenizers.a` and `blobs/` are
+present, `make build` uses them directly.
 
 ## Configuration
 

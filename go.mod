@@ -3,8 +3,12 @@ module ragebot
 go 1.27.0
 
 require (
+	github.com/daulet/tokenizers v1.27.0
+	github.com/klauspost/compress v1.20.0
 	github.com/rs/zerolog v1.35.1
+	github.com/yalue/onnxruntime_go v1.36.0
 	go.mau.fi/util v0.10.1
+	golang.org/x/sys v0.48.0
 	maunium.net/go/mautrix v0.31.0
 )
 
@@ -21,6 +25,5 @@ require (
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
 	golang.org/x/net v0.59.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 )
