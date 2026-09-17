@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Download the sentiment model from HuggingFace and export + quantize it to ONNX.
 
-Produces two files in the build directory:
+Produces one file in the build directory:
   model_int8.onnx   the dynamic-quantized int8 model (what the Go binary embeds)
-  tokenizer.json    the tokenizers-format tokenizer for the Go tokenizer binding
 
 The model is cardiffnlp/twitter-roberta-base-sentiment-latest (RobertaForSequenceClassification).
 The fp32 ONNX export is an in-memory intermediate (never written to disk); only the int8
-quantization is kept. Download and conversion use the shared helpers in hf_common.py.
+quantization is kept. The shared tokenizer.json is built once by scripts/build_tokenizer.py.
+Download and conversion use the shared helpers in hf_common.py.
 """
 import argparse
 import os
@@ -18,7 +18,7 @@ from transformers import RobertaForSequenceClassification
 import hf_common
 
 MODEL_ID = "cardiffnlp/twitter-roberta-base-sentiment-latest"
-FILES = ["config.json", "pytorch_model.bin", "vocab.json", "merges.txt", "special_tokens_map.json"]
+FILES = ["config.json", "pytorch_model.bin"]
 
 
 def main():
@@ -35,17 +35,8 @@ def main():
     model.eval()
 
     int8 = os.path.join(args.out, "model_int8.onnx")
-    tok_path = os.path.join(args.out, "tokenizer.json")
-
-    if not os.path.exists(int8):
-        hf_common.export_quantize(model, int8)
-
-    if not os.path.exists(tok_path):
-        print("building tokenizer.json")
-        hf_common.build_tokenizer(hf, tok_path)
-
-    for p in (int8, tok_path):
-        print(f"{p}: {os.path.getsize(p)} bytes")
+    hf_common.export_quantize(model, int8)
+    print(f"{int8}: {os.path.getsize(int8)} bytes")
 
 
 if __name__ == "__main__":

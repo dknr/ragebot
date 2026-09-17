@@ -6,7 +6,7 @@ Produces one file in the build directory:
 
 The model is cardiffnlp/twitter-roberta-base-irony (RobertaForSequenceClassification),
 the same RoBERTa-base architecture as the sentiment model. Its tokenizer is identical,
-so this script reuses the tokenizer.json built by scripts/convert.py and only downloads
+so this script reuses the tokenizer.json built by scripts/build_tokenizer.py and only downloads
 the irony weights + config. The fp32 ONNX export is an in-memory intermediate (never
 written to disk); only the int8 quantization is kept.
 """
@@ -36,9 +36,7 @@ def main():
     model.eval()
 
     int8 = os.path.join(args.out, "irony_int8.onnx")
-    if not os.path.exists(int8):
-        hf_common.export_quantize(model, int8)
-
+    hf_common.export_quantize(model, int8)
     print(f"{int8}: {os.path.getsize(int8)} bytes")
 
 

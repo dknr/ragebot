@@ -32,7 +32,11 @@ run: build
 ## Download + convert the sentiment model: int8 quantization, tokenizer.json.
 model: $(WORK)/model_int8.onnx $(WORK)/tokenizer.json
 
-$(WORK)/model_int8.onnx $(WORK)/tokenizer.json: $(PY) scripts/convert.py
+## Build the shared RoBERTa tokenizer (vocab.json + merges.txt -> tokenizer.json).
+$(WORK)/tokenizer.json: $(PY) scripts/build_tokenizer.py
+	$(PY) scripts/build_tokenizer.py --work $(WORK) --out $(WORK)
+
+$(WORK)/model_int8.onnx: $(PY) scripts/convert.py $(WORK)/tokenizer.json
 	$(PY) scripts/convert.py --work $(WORK) --out $(WORK)
 
 ## Download + convert the irony model: int8 quantization, reuses tokenizer.json.
