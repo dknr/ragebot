@@ -1,18 +1,12 @@
-module ragebot
+module ragecore
 
 go 1.27.0
 
 require (
-	github.com/daulet/tokenizers v1.27.0
-	github.com/klauspost/compress v1.20.0
 	github.com/rs/zerolog v1.35.1
-	github.com/yalue/onnxruntime_go v1.36.0
-	golang.org/x/sys v0.48.0
+	go.mau.fi/util v0.10.1
 	maunium.net/go/mautrix v0.31.0
-	ragecore v0.0.0
 )
-
-replace ragecore => ./ragecore
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
@@ -24,9 +18,9 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	go.mau.fi/util v0.10.1 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
 	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 )
