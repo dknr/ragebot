@@ -324,10 +324,11 @@ func main() {
 		}
 	})
 
-	// Run sentiment analysis on every incoming message, log the result, and
-	// react with an emoji when the confidence clears a threshold. Skip our own
-	// sends so we do not re-analyze what we said. Matrix allows multiple
-	// reactions per event, so lizard and neat messages still get analyzed.
+	// Run sentiment + irony analysis on every incoming message, log both, and
+	// react with an emoji when a confidence clears a threshold. Irony takes
+	// priority over sentiment. Skip our own sends so we do not re-analyze what
+	// we said. Matrix allows multiple reactions per event, so lizard and neat
+	// messages still get analyzed.
 	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
 		if evt.Sender == client.UserID {
 			return
@@ -344,16 +345,28 @@ func main() {
 				Msg("Sentiment analysis failed")
 			return
 		}
+		ironyScore := float32(0)
+		irony, ierr := senti.classifyIrony(body)
+		if ierr != nil {
+			log.Error().Err(ierr).
+				Stringer("room_id", evt.RoomID).
+				Stringer("event_id", evt.ID).
+				Msg("Irony analysis failed, degrading to sentiment-only")
+		} else {
+			ironyScore = irony.Scores[1]
+		}
 		log.Info().
 			Str("label", res.Label).
 			Float32("confidence", res.Confidence).
 			Any("scores", res.Scores).
 			Int("tokens", res.Tokens).
 			Float64("elapsed_ms", res.ElapsedMS).
+			Str("irony_label", irony.Label).
+			Float32("irony_score", ironyScore).
 			Stringer("room_id", evt.RoomID).
 			Stringer("event_id", evt.ID).
 			Msg("Sentiment analysis")
-		if emoji := emojiForSentiment(res.Label, res.Confidence); emoji != "" {
+		if emoji := emojiForSentiment(res.Label, res.Confidence, ironyScore); emoji != "" {
 			log.Debug().
 				Str("emoji", emoji).
 				Stringer("room_id", evt.RoomID).

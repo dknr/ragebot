@@ -26,6 +26,9 @@ import (
 //go:embed blobs/model.onnx.zst
 var modelZst []byte
 
+//go:embed blobs/irony.onnx.zst
+var ironyZst []byte
+
 //go:embed blobs/tokenizer.json.zst
 var tokenizerZst []byte
 
@@ -34,6 +37,9 @@ var ortSoZst []byte
 
 // labels matches the model's logits column order (negative, neutral, positive).
 var labels = []string{"negative", "neutral", "positive"}
+
+// ironyLabels matches the irony model's logits column order (non_irony, irony).
+var ironyLabels = []string{"non_irony", "irony"}
 
 // sentiment is the result of a single classification run.
 type sentiment struct {
@@ -50,6 +56,7 @@ type analyzer struct {
 	mu        sync.Mutex
 	tk        *tok.Tokenizer
 	sess      *ort.DynamicAdvancedSession
+	ironySess *ort.DynamicAdvancedSession
 	sessOpts  *ort.SessionOptions
 	maxTokens int
 }
@@ -136,15 +143,33 @@ func newAnalyzer(maxTokens int) (*analyzer, error) {
 		return nil, err
 	}
 
+	ironySess, err := ort.NewDynamicAdvancedSessionWithONNXData(decompress(ironyZst),
+		[]string{"input_ids", "attention_mask"}, []string{"logits"}, sessOpts)
+	if err != nil {
+		return nil, err
+	}
+
 	return &analyzer{
 		tk:        tk,
 		sess:      sess,
+		ironySess: ironySess,
 		sessOpts:  sessOpts,
 		maxTokens: maxTokens,
 	}, nil
 }
 
 func (a *analyzer) classify(text string) (sentiment, error) {
+	return a.run(text, labels, a.sess)
+}
+
+// classifyIrony runs the same tokenize + inference pipeline against the irony
+// model. The returned Scores[1] is the irony probability (logits column order
+// is non_irony, irony).
+func (a *analyzer) classifyIrony(text string) (sentiment, error) {
+	return a.run(text, ironyLabels, a.ironySess)
+}
+
+func (a *analyzer) run(text string, labels []string, sess *ort.DynamicAdvancedSession) (sentiment, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -184,7 +209,7 @@ func (a *analyzer) classify(text string) (sentiment, error) {
 	defer outT.Destroy()
 
 	t0 := time.Now()
-	if err := a.sess.Run([]ort.Value{inT, maT}, []ort.Value{outT}); err != nil {
+	if err := sess.Run([]ort.Value{inT, maT}, []ort.Value{outT}); err != nil {
 		return sentiment{}, err
 	}
 	probs := softmax(append([]float32(nil), outT.GetData()...))
@@ -204,14 +229,19 @@ func (a *analyzer) classify(text string) (sentiment, error) {
 	}, nil
 }
 
-// emojiThresholds maps each sentiment label to descending (threshold, emoji)
-// pairs, ported from the Python predecessor (refs/ragebot-python/defaults.py).
-// The first threshold the confidence meets wins; below the lowest threshold no
-// reaction is sent. There is no irony model in this port, so no irony priority.
+// emojiThresholds maps each label to descending (threshold, emoji) pairs,
+// ported from the Python predecessor (refs/ragebot-python/defaults.py). The
+// first threshold the confidence meets wins; below the lowest threshold no
+// reaction is sent. "irony" is checked first, so irony takes priority over
+// the sentiment label.
 var emojiThresholds = map[string][]struct {
 	threshold float32
 	emoji     string
 }{
+	"irony": {
+		{0.90, "🤨"},
+		{0.80, "😏"},
+	},
 	"negative": {
 		{0.95, "🤬"},
 		{0.90, "😡"},
@@ -228,8 +258,17 @@ var emojiThresholds = map[string][]struct {
 }
 
 // emojiForSentiment returns the reaction emoji for a classification result, or
-// "" when the confidence is below every threshold for that label.
-func emojiForSentiment(label string, confidence float32) string {
+// "" when the confidence is below every threshold for that label. Irony is
+// evaluated first (highest priority); if it clears an irony threshold it wins,
+// otherwise the sentiment label's thresholds apply.
+func emojiForSentiment(label string, confidence float32, irony float32) string {
+	if thresholds, ok := emojiThresholds["irony"]; ok {
+		for _, t := range thresholds {
+			if irony >= t.threshold {
+				return t.emoji
+			}
+		}
+	}
 	thresholds, ok := emojiThresholds[label]
 	if !ok {
 		return ""
