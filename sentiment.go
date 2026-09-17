@@ -203,3 +203,41 @@ func (a *analyzer) classify(text string) (sentiment, error) {
 		ElapsedMS:  float64(time.Since(t0).Microseconds()) / 1000.0,
 	}, nil
 }
+
+// emojiThresholds maps each sentiment label to descending (threshold, emoji)
+// pairs, ported from the Python predecessor (refs/ragebot-python/defaults.py).
+// The first threshold the confidence meets wins; below the lowest threshold no
+// reaction is sent. There is no irony model in this port, so no irony priority.
+var emojiThresholds = map[string][]struct {
+	threshold float32
+	emoji     string
+}{
+	"negative": {
+		{0.95, "🤬"},
+		{0.90, "😡"},
+		{0.80, "🙈"},
+	},
+	"neutral": {
+		{0.90, "😐"},
+	},
+	"positive": {
+		{0.95, "🎉"},
+		{0.90, "👏"},
+		{0.80, "👍"},
+	},
+}
+
+// emojiForSentiment returns the reaction emoji for a classification result, or
+// "" when the confidence is below every threshold for that label.
+func emojiForSentiment(label string, confidence float32) string {
+	thresholds, ok := emojiThresholds[label]
+	if !ok {
+		return ""
+	}
+	for _, t := range thresholds {
+		if confidence >= t.threshold {
+			return t.emoji
+		}
+	}
+	return ""
+}

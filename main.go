@@ -320,14 +320,16 @@ func main() {
 		}
 	})
 
-	// Run sentiment analysis on every incoming message and log the result.
-	// Skip our own sends so we do not re-analyze what we said.
+	// Run sentiment analysis on every incoming message, log the result, and
+	// react with an emoji when the confidence clears a threshold. Skip our own
+	// sends so we do not re-analyze what we said, and skip lizard messages so
+	// the lizard handler below is the sole reaction on them.
 	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
 		if evt.Sender == client.UserID {
 			return
 		}
 		body := evt.Content.AsMessage().Body
-		if body == "" {
+		if body == "" || strings.Contains(strings.ToLower(body), "lizard") {
 			return
 		}
 		res, err := senti.classify(body)
@@ -347,6 +349,16 @@ func main() {
 			Stringer("room_id", evt.RoomID).
 			Stringer("event_id", evt.ID).
 			Msg("Sentiment analysis")
+		if emoji := emojiForSentiment(res.Label, res.Confidence); emoji != "" {
+			log.Debug().
+				Str("emoji", emoji).
+				Stringer("room_id", evt.RoomID).
+				Stringer("event_id", evt.ID).
+				Msg("Sending sentiment reaction")
+			if _, err := client.SendReaction(ctx, evt.RoomID, evt.ID, emoji); err != nil {
+				log.Error().Err(err).Stringer("room_id", evt.RoomID).Stringer("event_id", evt.ID).Msg("Failed to send reaction")
+			}
+		}
 	})
 
 	// React with a lizard emoji to every incoming message whose body mentions
