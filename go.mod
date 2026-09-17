@@ -9,10 +9,10 @@ require (
 	github.com/yalue/onnxruntime_go v1.36.0
 	golang.org/x/sys v0.48.0
 	maunium.net/go/mautrix v0.31.0
-	ragecore v0.0.0
+	ragecore v0.0.0-20260917221726-a7f6593cc1a3
 )
 
-replace ragecore => ./ragecore
+replace ragecore => github.com/dknr/ragecore v0.0.0-20260917221726-a7f6593cc1a3
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
