@@ -15,6 +15,9 @@ work/
 .venv/
 libtokenizers.a
 
+# NEAT! reaction GIFs are local-only; the sentinel README stays committed
+assets/*.gif
+
 # Crush session data
 /.crush/
 refs/

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -39,6 +40,9 @@ type Config struct {
 
 // senti is the shared sentiment analyzer, initialized at startup.
 var senti *analyzer
+
+// neatRe matches "neat", "neat!", or "neat." as a whole word, case-insensitive.
+var neatRe = regexp.MustCompile(`(?i)\bneat[!\.]*\b`)
 
 func loadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -322,14 +326,14 @@ func main() {
 
 	// Run sentiment analysis on every incoming message, log the result, and
 	// react with an emoji when the confidence clears a threshold. Skip our own
-	// sends so we do not re-analyze what we said, and skip lizard messages so
-	// the lizard handler below is the sole reaction on them.
+	// sends so we do not re-analyze what we said. Matrix allows multiple
+	// reactions per event, so lizard and neat messages still get analyzed.
 	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
 		if evt.Sender == client.UserID {
 			return
 		}
 		body := evt.Content.AsMessage().Body
-		if body == "" || strings.Contains(strings.ToLower(body), "lizard") {
+		if body == "" {
 			return
 		}
 		res, err := senti.classify(body)
@@ -377,6 +381,25 @@ func main() {
 			Msg("Sending lizard reaction")
 		if _, err := client.SendReaction(ctx, evt.RoomID, evt.ID, "🦎"); err != nil {
 			log.Error().Err(err).Stringer("room_id", evt.RoomID).Stringer("event_id", evt.ID).Msg("Failed to send reaction")
+		}
+	})
+
+	// Send a random neat GIF whenever an incoming message says "neat" (also
+	// "neat!" or "neat."). Skip our own sends to avoid GIFing ourselves.
+	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
+		if evt.Sender == client.UserID {
+			return
+		}
+		body := evt.Content.AsMessage().Body
+		if !neatRe.MatchString(body) {
+			return
+		}
+		log.Debug().
+			Stringer("room_id", evt.RoomID).
+			Stringer("event_id", evt.ID).
+			Msg("Sending neat GIF")
+		if err := sendNeatGif(ctx, client, evt.RoomID); err != nil {
+			log.Error().Err(err).Stringer("room_id", evt.RoomID).Stringer("event_id", evt.ID).Msg("Failed to send neat GIF")
 		}
 	})
 
