@@ -1,14 +1,24 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
+
+var testAnalyzer *analyzer
+
+func TestMain(m *testing.M) {
+	var err error
+	testAnalyzer, err = newAnalyzer(512)
+	if err != nil {
+		panic(err)
+	}
+	os.Exit(m.Run())
+}
 
 func TestIronyInference(t *testing.T) {
-	a, err := newAnalyzer(512)
-	if err != nil {
-		t.Fatalf("newAnalyzer: %v", err)
-	}
 	ironic := "Oh great, another Monday, just what I needed."
-	res, err := a.classifyIrony(ironic)
+	res, err := testAnalyzer.classifyIrony(ironic)
 	if err != nil {
 		t.Fatalf("classifyIrony: %v", err)
 	}
@@ -18,7 +28,7 @@ func TestIronyInference(t *testing.T) {
 	}
 
 	plain := "The weather is nice today and I am happy."
-	res2, err := a.classifyIrony(plain)
+	res2, err := testAnalyzer.classifyIrony(plain)
 	if err != nil {
 		t.Fatalf("classifyIrony: %v", err)
 	}
@@ -34,4 +44,64 @@ func TestIronyInference(t *testing.T) {
 	if res2.Scores[1] >= 0.80 {
 		t.Errorf("expected plain sample below the 0.80 irony threshold, got %v", res2.Scores[1])
 	}
+}
+
+func TestEmojiForEmotion(t *testing.T) {
+	tests := []struct {
+		label    string
+		prob     float32
+		wantEmoji string
+	}{
+		{"anger", 0.96, "🤬"},
+		{"anger", 0.90, "😡"},
+		{"anger", 0.81, "😠"},
+		{"anger", 0.79, ""},
+		{"joy", 0.95, "😂"},
+		{"joy", 0.90, "🥳"},
+		{"joy", 0.81, "😊"},
+		{"joy", 0.79, ""},
+		{"sadness", 0.95, "😭"},
+		{"fear", 0.90, "😨"},
+		{"surprise", 0.85, "😲"},
+		{"love", 0.82, "💕"},
+		{"unknown", 0.99, ""},
+	}
+	for _, tt := range tests {
+		got := emojiForEmotion(tt.label, tt.prob)
+		if got != tt.wantEmoji {
+			t.Errorf("emojiForEmotion(%q, %.2f) = %q, want %q", tt.label, tt.prob, got, tt.wantEmoji)
+		}
+	}
+}
+
+func TestClassifyEmotions(t *testing.T) {
+	// Joyful text should score high on joy
+	joyText := "I am so happy and excited about the wonderful day ahead!"
+	res, err := testAnalyzer.classifyEmotions(joyText)
+	if err != nil {
+		t.Fatalf("classifyEmotions joy: %v", err)
+	}
+	t.Logf("joy text: label=%s confidence=%.3f scores=%v", res.Label, res.Confidence, res.Scores)
+	if res.Label != "joy" {
+		t.Errorf("expected joy label, got %q", res.Label)
+	}
+
+	// Angry text should score high on anger
+	angerText := "This is absolutely infuriating and makes me so angry!"
+	res2, err := testAnalyzer.classifyEmotions(angerText)
+	if err != nil {
+		t.Fatalf("classifyEmotions anger: %v", err)
+	}
+	t.Logf("anger text: label=%s confidence=%.3f scores=%v", res2.Label, res2.Confidence, res2.Scores)
+	if res2.Label != "anger" {
+		t.Errorf("expected anger label, got %q", res2.Label)
+	}
+
+	// Plain statement should not exceed high confidence thresholds
+	plainText := "The sky is blue and the grass is green."
+	res3, err := testAnalyzer.classifyEmotions(plainText)
+	if err != nil {
+		t.Fatalf("classifyEmotions plain: %v", err)
+	}
+	t.Logf("plain text: label=%s confidence=%.3f scores=%v", res3.Label, res3.Confidence, res3.Scores)
 }

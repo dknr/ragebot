@@ -1,4 +1,4 @@
-# Builds ragebot (a single Go binary) plus the embedded sentiment and irony
+# Builds ragebot (a single Go binary) plus the embedded sentiment, emotion, and irony
 # models and ONNX Runtime shared library. The model blobs are regenerated from
 # HuggingFace, so a clean checkout needs Go (1.21+ with cgo), Rust + cargo (to
 # build libtokenizers.a from github.com/daulet/tokenizers), and Python 3 (to
@@ -19,11 +19,11 @@ TOK_MOD   := $(shell go env GOMODCACHE)/github.com/daulet/tokenizers@v1.27.0
 # mautrix-go ships two olm implementations: the C libolm (needs the olm library)
 # and the pure Go goolm. The goolm tag avoids the cgo dependency for olm; the
 # tokenizers binding still needs cgo and libtokenizers.a on the link path.
-.PHONY: all build run model irony ort vet clean
+.PHONY: all build run model emotion irony ort vet clean
 
 all: build
 
-build: $(BLOBS)/model.onnx.zst $(BLOBS)/irony.onnx.zst $(BLOBS)/tokenizer.json.zst $(BLOBS)/ort.so.zst libtokenizers.a
+build: $(BLOBS)/model.onnx.zst $(BLOBS)/emotion_int8.onnx.zst $(BLOBS)/irony.onnx.zst $(BLOBS)/tokenizer.json.zst $(BLOBS)/ort.so.zst libtokenizers.a
 	CGO_LDFLAGS="-L$(CURDIR)" go build -tags goolm -o $(BIN) .
 
 run: build
@@ -45,6 +45,12 @@ irony: $(WORK)/irony_int8.onnx
 $(WORK)/irony_int8.onnx: $(PY) scripts/convert_irony.py $(WORK)/tokenizer.json
 	$(PY) scripts/convert_irony.py --work $(WORK) --out $(WORK)
 
+## Download + convert the emotion model: int8 quantization, reuses tokenizer.json.
+emotion: $(WORK)/emotion_int8.onnx
+
+$(WORK)/emotion_int8.onnx: $(PY) scripts/convert_emotion.py $(WORK)/tokenizer.json
+	$(PY) scripts/convert_emotion.py --work $(WORK) --out $(WORK)
+
 ## Fetch the ONNX Runtime shared library for the current arch.
 ort: $(WORK)/ort.so
 
@@ -53,6 +59,10 @@ $(WORK)/ort.so: $(PY) scripts/fetch_ort.py
 
 ## Compress build artifacts into blobs/ for go:embed.
 $(BLOBS)/model.onnx.zst: $(WORK)/model_int8.onnx
+	mkdir -p $(BLOBS)
+	zstd -f -19 -q $< -o $@
+
+$(BLOBS)/emotion_int8.onnx.zst: $(WORK)/emotion_int8.onnx
 	mkdir -p $(BLOBS)
 	zstd -f -19 -q $< -o $@
 

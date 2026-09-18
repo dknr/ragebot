@@ -153,6 +153,45 @@ func main() {
 		}
 	})
 
+	// Run emotion analysis on every incoming message, log the 11-class
+	// probabilities, and react with the highest-scoring emotion emoji when it
+	// clears the threshold. OnMessage skips our own sends to avoid reacting to
+	// ourselves.
+	bot.OnMessage(func(ctx context.Context, evt *event.Event) {
+		body := evt.Content.AsMessage().Body
+		if body == "" {
+			return
+		}
+		res, err := senti.classifyEmotions(body)
+		if err != nil {
+			log.Error().Err(err).
+				Stringer("room_id", evt.RoomID).
+				Stringer("event_id", evt.ID).
+				Msg("Emotion analysis failed")
+			return
+		}
+		emojis := emojiForEmotion(res.Label, res.Confidence)
+		log.Info().
+			Str("label", res.Label).
+			Float32("confidence", res.Confidence).
+			Any("scores", res.Scores).
+			Int("tokens", res.Tokens).
+			Float64("elapsed_ms", res.ElapsedMS).
+			Stringer("room_id", evt.RoomID).
+			Stringer("event_id", evt.ID).
+			Msg("Emotion analysis")
+		if emojis != "" {
+			log.Debug().
+				Str("emoji", emojis).
+				Stringer("room_id", evt.RoomID).
+				Stringer("event_id", evt.ID).
+				Msg("Sending emotion reaction")
+			if _, err := bot.Client().SendReaction(ctx, evt.RoomID, evt.ID, emojis); err != nil {
+				log.Error().Err(err).Stringer("room_id", evt.RoomID).Stringer("event_id", evt.ID).Msg("Failed to send emotion reaction")
+			}
+		}
+	})
+
 	if err := bot.Run(ctx); err != nil {
 		log.Fatal().Err(err).Msg("Bot failed")
 	}
