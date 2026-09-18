@@ -192,6 +192,43 @@ func main() {
 		}
 	})
 
+	// Run hate detection on every incoming message, log the result, and react
+	// with an emoji when hate is detected. OnMessage skips our own sends.
+	bot.OnMessage(func(ctx context.Context, evt *event.Event) {
+		body := evt.Content.AsMessage().Body
+		if body == "" {
+			return
+		}
+		res, err := senti.classifyHate(body)
+		if err != nil {
+			log.Error().Err(err).
+				Stringer("room_id", evt.RoomID).
+				Stringer("event_id", evt.ID).
+				Msg("Hate detection failed")
+			return
+		}
+		emojis := emojiForHate(res.Label, res.Confidence)
+		log.Info().
+			Str("label", res.Label).
+			Float32("confidence", res.Confidence).
+			Any("scores", res.Scores).
+			Int("tokens", res.Tokens).
+			Float64("elapsed_ms", res.ElapsedMS).
+			Stringer("room_id", evt.RoomID).
+			Stringer("event_id", evt.ID).
+			Msg("Hate detection")
+		if emojis != "" {
+			log.Debug().
+				Str("emoji", emojis).
+				Stringer("room_id", evt.RoomID).
+				Stringer("event_id", evt.ID).
+				Msg("Sending hate reaction")
+			if _, err := bot.Client().SendReaction(ctx, evt.RoomID, evt.ID, emojis); err != nil {
+				log.Error().Err(err).Stringer("room_id", evt.RoomID).Stringer("event_id", evt.ID).Msg("Failed to send hate reaction")
+			}
+		}
+	})
+
 	if err := bot.Run(ctx); err != nil {
 		log.Fatal().Err(err).Msg("Bot failed")
 	}

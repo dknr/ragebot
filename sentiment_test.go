@@ -105,3 +105,48 @@ func TestClassifyEmotions(t *testing.T) {
 	}
 	t.Logf("plain text: label=%s confidence=%.3f scores=%v", res3.Label, res3.Confidence, res3.Scores)
 }
+
+func TestEmojiForHate(t *testing.T) {
+	tests := []struct {
+		label   string
+		hateProb float32
+		wantEmoji string
+	}{
+		{"HATE", 0.96, "🚫"},
+		{"HATE", 0.90, "⚠️"},
+		{"HATE", 0.81, "🔇"},
+		{"HATE", 0.79, ""},
+		{"NOT-HATE", 0.99, ""},
+		{"NOT-HATE", 0.50, ""},
+	}
+	for _, tt := range tests {
+		got := emojiForHate(tt.label, tt.hateProb)
+		if got != tt.wantEmoji {
+			t.Errorf("emojiForHate(%q, %.2f) = %q, want %q", tt.label, tt.hateProb, got, tt.wantEmoji)
+		}
+	}
+}
+
+func TestClassifyHate(t *testing.T) {
+	// Explicit hate speech should be classified as HATE
+	hateText := "All people of this race should be killed and eradicated."
+	res, err := testAnalyzer.classifyHate(hateText)
+	if err != nil {
+		t.Fatalf("classifyHate hate: %v", err)
+	}
+	t.Logf("hate text: label=%s confidence=%.3f scores=%v", res.Label, res.Confidence, res.Scores)
+	if res.Label != "HATE" {
+		t.Errorf("expected HATE label, got %q", res.Label)
+	}
+
+	// Normal text should be classified as NOT-HATE
+	normalText := "I love this community, everyone is so friendly and helpful here."
+	res2, err := testAnalyzer.classifyHate(normalText)
+	if err != nil {
+		t.Fatalf("classifyHate normal: %v", err)
+	}
+	t.Logf("normal text: label=%s confidence=%.3f scores=%v", res2.Label, res2.Confidence, res2.Scores)
+	if res2.Label != "NOT-HATE" {
+		t.Errorf("expected NOT-HATE label, got %q", res2.Label)
+	}
+}

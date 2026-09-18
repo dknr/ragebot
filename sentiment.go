@@ -32,6 +32,9 @@ var ironyZst []byte
 //go:embed blobs/emotion_int8.onnx.zst
 var emotionZst []byte
 
+//go:embed blobs/hate_int8.onnx.zst
+var hateZst []byte
+
 //go:embed blobs/tokenizer.json.zst
 var tokenizerZst []byte
 
@@ -46,6 +49,8 @@ var ironyLabels = []string{"non_irony", "irony"}
 
 // emotionLabels matches the emotion model's logits column order (11 classes).
 var emotionLabels = []string{"anger", "anticipation", "disgust", "fear", "joy", "love", "optimism", "pessimism", "sadness", "surprise", "trust"}
+
+var hateLabels = []string{"NOT-HATE", "HATE"}
 
 // sentiment is the result of a single classification run.
 type sentiment struct {
@@ -64,6 +69,7 @@ type analyzer struct {
 	sess        *ort.DynamicAdvancedSession
 	ironySess   *ort.DynamicAdvancedSession
 	emotionSess *ort.DynamicAdvancedSession
+	hateSess    *ort.DynamicAdvancedSession
 	sessOpts    *ort.SessionOptions
 	maxTokens   int
 }
@@ -162,11 +168,18 @@ func newAnalyzer(maxTokens int) (*analyzer, error) {
 		return nil, err
 	}
 
+	hateSess, err := ort.NewDynamicAdvancedSessionWithONNXData(decompress(hateZst),
+		[]string{"input_ids", "attention_mask"}, []string{"logits"}, sessOpts)
+	if err != nil {
+		return nil, err
+	}
+
 	return &analyzer{
 		tk:          tk,
 		sess:        sess,
 		ironySess:   ironySess,
 		emotionSess: emotionSess,
+		hateSess:    hateSess,
 		sessOpts:    sessOpts,
 		maxTokens:   maxTokens,
 	}, nil
@@ -187,6 +200,12 @@ func (a *analyzer) classifyIrony(text string) (sentiment, error) {
 // logits (multilabel). Returns the per-label sigmoid probabilities.
 func (a *analyzer) classifyEmotions(text string) (sentiment, error) {
 	return a.runMultilabel(text, emotionLabels, a.emotionSess)
+}
+
+// classifyHate runs the hate model. Scores[1] is the hate probability (label
+// order is NOT-HATE, HATE).
+func (a *analyzer) classifyHate(text string) (sentiment, error) {
+	return a.run(text, hateLabels, a.hateSess)
 }
 
 // sigmoid converts a raw logit to a probability.
@@ -449,6 +468,36 @@ func emojiForEmotion(label string, probability float32) string {
 	}
 	for _, t := range thresholds {
 		if probability >= t.threshold {
+			return t.emoji
+		}
+	}
+	return ""
+}
+
+// emojiHateThresholds maps the hate label to descending (threshold, emoji) pairs.
+var emojiHateThresholds = map[string][]struct {
+	threshold float32
+	emoji     string
+}{
+	"HATE": {
+		{0.95, "🚫"},
+		{0.90, "⚠️"},
+		{0.80, "🔇"},
+	},
+}
+
+// emojiForHate returns the reaction emoji for a hate classification, or "" when
+// the hate probability is below the threshold or the label is NOT-HATE.
+func emojiForHate(label string, hateProb float32) string {
+	if label != "HATE" {
+		return ""
+	}
+	thresholds, ok := emojiHateThresholds[label]
+	if !ok {
+		return ""
+	}
+	for _, t := range thresholds {
+		if hateProb >= t.threshold {
 			return t.emoji
 		}
 	}
