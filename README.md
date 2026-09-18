@@ -6,16 +6,16 @@ A Matrix bot client built on [mautrix-go](https://maunium.net/go/mautrix) that:
   (auto-accepts incoming SAS verification requests).
 - **Auto-joins** rooms when invited.
 - **Logs every received event** (messages, invites, state, to-device, everything) with zerolog.
-- **Runs sentiment + irony + emotion + hate detection** on every incoming message body and logs the result
+- **Runs sentiment + irony + emotion analysis** on every incoming message body and logs the result
   (negative/neutral/positive with confidence, plus non_irony/irony, plus 11 emotion probabilities
-  via sigmoid, plus binary hate classification). It reacts with an emoji when a confidence clears a threshold, with
-  irony taking priority over sentiment; emotion and hate react independently on top.
+  via sigmoid). It reacts with a single emoji when the highest-scoring label clears a threshold;
+  emotion and irony compete on equal footing with sentiment.
 - On startup: **logs in**, **verifies its own device** if necessary (with a recovery key or by
   generating new cross-signing keys), and **signs out any other sessions**.
 
 ## Building
 
-The binary embeds the sentiment, hate, emotion, and irony models, the tokenizer, and the ONNX Runtime shared
+The binary embeds the sentiment, emotion, and irony models, the tokenizer, and the ONNX Runtime shared
 library as compressed blobs (`blobs/*.zst`), so `ragebot` is a single self-contained binary.
 
 mautrix-go ships two olm implementations: the C `libolm` (needs the olm library) and the pure Go
@@ -28,7 +28,7 @@ make build   # CGO_LDFLAGS="-L$(CURDIR)" go build -tags goolm -o ragebot .
 ```
 
 `libtokenizers.a` and the `blobs/` are build output (gitignored). A clean checkout regenerates
-them with `make model`, `make hate`, `make emotion`, `make irony`, `make ort`, and the `libtokenizers.a` target, which need
+them with `make model`, `make emotion`, `make irony`, `make ort`, and the `libtokenizers.a` target, which need
 Python 3 (torch + transformers + onnxruntime) and Rust/cargo. If a prebuilt `libtokenizers.a`
 and `blobs/` are present, `make build` uses them directly.
 

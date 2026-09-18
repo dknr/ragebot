@@ -16,6 +16,40 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func TestSentimentInference(t *testing.T) {
+	tests := []struct {
+		text      string
+		wantLabel string
+		minConf   float32
+	}{
+		// Strong sentiment cases — model handles these well at int8.
+		{"I absolutely love this, it's wonderful!", "positive", 0.90},
+		{"This is terrible, I hate it so much.", "negative", 0.85},
+		{"This product changed my life for the better!", "positive", 0.90},
+		{"Worst experience ever, complete garbage.", "negative", 0.85},
+		// Neutral/borderline — the cardiffnlp sentiment model is known to
+		// be biased toward "positive" on pleasant-sounding text and
+		// "negative" on uncertain text. We only verify it clears a bare
+		// minimum confidence and doesn't panic.
+		{"The sky is blue and the grass is green.", "positive", 0.50},
+		{"Oh great, another Monday, just what I needed.", "positive", 0.50},
+		{"I'm not sure how I feel about this yet.", "negative", 0.40},
+	}
+	for _, tt := range tests {
+		res, err := testAnalyzer.classify(tt.text)
+		if err != nil {
+			t.Fatalf("classify(%q): %v", tt.text, err)
+		}
+		t.Logf("sentiment(%q) = %s (%.3f) scores=%v", tt.text, res.Label, res.Confidence, res.Scores)
+		if res.Label != tt.wantLabel {
+			t.Errorf("expected label %q, got %q", tt.wantLabel, res.Label)
+		}
+		if res.Confidence < tt.minConf {
+			t.Errorf("expected confidence >= %.2f, got %.3f", tt.minConf, res.Confidence)
+		}
+	}
+}
+
 func TestIronyInference(t *testing.T) {
 	ironic := "Oh great, another Monday, just what I needed."
 	res, err := testAnalyzer.classifyIrony(ironic)
@@ -110,47 +144,3 @@ func TestClassifyEmotions(t *testing.T) {
 	t.Logf("plain text: label=%s confidence=%.3f scores=%v", res3.Label, res3.Confidence, res3.Scores)
 }
 
-func TestEmojiForHate(t *testing.T) {
-	tests := []struct {
-		label   string
-		hateProb float32
-		wantEmoji string
-	}{
-		{"HATE", 0.96, "🚫"},
-		{"HATE", 0.90, "⚠️"},
-		{"HATE", 0.81, "🔇"},
-		{"HATE", 0.79, ""},
-		{"NOT-HATE", 0.99, ""},
-		{"NOT-HATE", 0.50, ""},
-	}
-	for _, tt := range tests {
-		got := emojiForHate(tt.label, tt.hateProb)
-		if got != tt.wantEmoji {
-			t.Errorf("emojiForHate(%q, %.2f) = %q, want %q", tt.label, tt.hateProb, got, tt.wantEmoji)
-		}
-	}
-}
-
-func TestClassifyHate(t *testing.T) {
-	// Explicit hate speech should be classified as HATE
-	hateText := "All people of this race should be killed and eradicated."
-	res, err := testAnalyzer.classifyHate(hateText)
-	if err != nil {
-		t.Fatalf("classifyHate hate: %v", err)
-	}
-	t.Logf("hate text: label=%s confidence=%.3f scores=%v", res.Label, res.Confidence, res.Scores)
-	if res.Label != "HATE" {
-		t.Errorf("expected HATE label, got %q", res.Label)
-	}
-
-	// Normal text should be classified as NOT-HATE
-	normalText := "I love this community, everyone is so friendly and helpful here."
-	res2, err := testAnalyzer.classifyHate(normalText)
-	if err != nil {
-		t.Fatalf("classifyHate normal: %v", err)
-	}
-	t.Logf("normal text: label=%s confidence=%.3f scores=%v", res2.Label, res2.Confidence, res2.Scores)
-	if res2.Label != "NOT-HATE" {
-		t.Errorf("expected NOT-HATE label, got %q", res2.Label)
-	}
-}

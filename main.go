@@ -73,8 +73,8 @@ func main() {
 	// all scores, and react with the single best emoji when any confidence
 	// clears a threshold. Irony and all emotion labels compete with sentiment
 	// on equal footing. OnMessage skips our own sends so we do not re-analyze
-	// what we said. Matrix allows multiple reactions per event, so lizard,
-	// neat, and hate still get analyzed independently.
+	// what we said. Matrix allows multiple reactions per event, so lizard and
+	// neat still get analyzed independently.
 	bot.OnMessage(func(ctx context.Context, evt *event.Event) {
 		body := evt.Content.AsMessage().Body
 		if body == "" {
@@ -165,43 +165,6 @@ func main() {
 			Msg("Sending neat GIF")
 		if err := sendNeatGif(ctx, bot.Client(), evt.RoomID); err != nil {
 			log.Error().Err(err).Stringer("room_id", evt.RoomID).Stringer("event_id", evt.ID).Msg("Failed to send neat GIF")
-		}
-	})
-
-	// Run hate detection on every incoming message, log the result, and react
-	// with an emoji when hate is detected. OnMessage skips our own sends.
-	bot.OnMessage(func(ctx context.Context, evt *event.Event) {
-		body := evt.Content.AsMessage().Body
-		if body == "" {
-			return
-		}
-		res, err := senti.classifyHate(body)
-		if err != nil {
-			log.Error().Err(err).
-				Stringer("room_id", evt.RoomID).
-				Stringer("event_id", evt.ID).
-				Msg("Hate detection failed")
-			return
-		}
-		emojis := emojiForHate(res.Label, res.Confidence)
-		log.Info().
-			Str("label", res.Label).
-			Float32("confidence", res.Confidence).
-			Any("scores", res.Scores).
-			Int("tokens", res.Tokens).
-			Float64("elapsed_ms", res.ElapsedMS).
-			Stringer("room_id", evt.RoomID).
-			Stringer("event_id", evt.ID).
-			Msg("Hate detection")
-		if emojis != "" {
-			log.Debug().
-				Str("emoji", emojis).
-				Stringer("room_id", evt.RoomID).
-				Stringer("event_id", evt.ID).
-				Msg("Sending hate reaction")
-			if _, err := bot.Client().SendReaction(ctx, evt.RoomID, evt.ID, emojis); err != nil {
-				log.Error().Err(err).Stringer("room_id", evt.RoomID).Stringer("event_id", evt.ID).Msg("Failed to send hate reaction")
-			}
 		}
 	})
 
