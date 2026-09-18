@@ -347,59 +347,10 @@ func (a *analyzer) runMultilabel(text string, labels []string, sess *ort.Dynamic
 
 // emojiThresholds maps each label to descending (threshold, emoji) pairs,
 // ported from the Python predecessor (refs/ragebot-python/defaults.py). The
-// first threshold the confidence meets wins; below the lowest threshold no
-// reaction is sent. "irony" is checked first, so irony takes priority over
-// the sentiment label.
+// combined map covers sentiment (negative/neutral/positive), irony, and all 11
+// emotion classes. The first threshold the confidence meets wins; below the
+// lowest threshold no reaction is sent.
 var emojiThresholds = map[string][]struct {
-	threshold float32
-	emoji     string
-}{
-	"irony": {
-		{0.95, "😏"},
-	},
-	"negative": {
-		{0.95, "🤬"},
-		{0.90, "😡"},
-		{0.80, "🙈"},
-	},
-	"neutral": {
-		{0.90, "😐"},
-	},
-	"positive": {
-		{0.95, "🎉"},
-		{0.90, "👏"},
-		{0.80, "👍"},
-	},
-}
-
-// emojiForSentiment returns the reaction emoji for a classification result, or
-// "" when the confidence is below every threshold for that label. Irony is
-// evaluated first (highest priority); if it clears an irony threshold it wins,
-// otherwise the sentiment label's thresholds apply.
-func emojiForSentiment(label string, confidence float32, irony float32) string {
-	if thresholds, ok := emojiThresholds["irony"]; ok {
-		for _, t := range thresholds {
-			if irony >= t.threshold {
-				return t.emoji
-			}
-		}
-	}
-	thresholds, ok := emojiThresholds[label]
-	if !ok {
-		return ""
-	}
-	for _, t := range thresholds {
-		if confidence >= t.threshold {
-			return t.emoji
-		}
-	}
-	return ""
-}
-
-// emojiEmotionThresholds maps each emotion label to descending
-// (threshold, emoji) pairs. The first threshold the emotion probability meets
-// wins; below the lowest threshold no reaction is sent.
-var emojiEmotionThresholds = map[string][]struct {
 	threshold float32
 	emoji     string
 }{
@@ -422,6 +373,9 @@ var emojiEmotionThresholds = map[string][]struct {
 		{0.90, "😨"},
 		{0.80, "😰"},
 	},
+	"irony": {
+		{0.95, "😏"},
+	},
 	"joy": {
 		{0.95, "😂"},
 		{0.90, "🥳"},
@@ -432,6 +386,14 @@ var emojiEmotionThresholds = map[string][]struct {
 		{0.90, "😍"},
 		{0.80, "💕"},
 	},
+	"negative": {
+		{0.95, "🤬"},
+		{0.90, "😡"},
+		{0.80, "🙈"},
+	},
+	"neutral": {
+		{0.90, "😐"},
+	},
 	"optimism": {
 		{0.95, "🌟"},
 		{0.90, "💪"},
@@ -441,6 +403,11 @@ var emojiEmotionThresholds = map[string][]struct {
 		{0.95, "😞"},
 		{0.90, "😒"},
 		{0.80, "🙁"},
+	},
+	"positive": {
+		{0.95, "🎉"},
+		{0.90, "👏"},
+		{0.80, "👍"},
 	},
 	"sadness": {
 		{0.95, "😭"},
@@ -458,20 +425,45 @@ var emojiEmotionThresholds = map[string][]struct {
 	},
 }
 
-// emojiForEmotion returns the reaction emoji for an emotion label and its
-// probability, or "" when the probability is below every threshold for that
-// emotion.
-func emojiForEmotion(label string, probability float32) string {
-	thresholds, ok := emojiEmotionThresholds[label]
-	if !ok {
-		return ""
-	}
-	for _, t := range thresholds {
-		if probability >= t.threshold {
-			return t.emoji
+// emojiForUnified returns the reaction emoji by comparing all labels (sentiment,
+// irony, emotion) and picking the one whose highest-met confidence is greatest.
+// It selects the best threshold across sentiment, irony, and all 11 emotion
+// classes. Returns "" when no label meets any threshold.
+func emojiForUnified(label string, scores []float32, ironyScore float32, emotionLabel string, emotionScores []float32) string {
+	bestEmoji := ""
+	bestConf := float32(0)
+
+	check := func(name string, probs []float32) {
+		thresholds, ok := emojiThresholds[name]
+		if !ok {
+			return
+		}
+		for _, t := range thresholds {
+			for _, p := range probs {
+				if p >= t.threshold && p > bestConf {
+					bestConf = p
+					bestEmoji = t.emoji
+				}
+			}
 		}
 	}
-	return ""
+
+	check(label, scores)
+
+	if thresholds, ok := emojiThresholds["irony"]; ok {
+		for _, t := range thresholds {
+			if ironyScore >= t.threshold && ironyScore > bestConf {
+				bestConf = ironyScore
+				bestEmoji = t.emoji
+			}
+		}
+	}
+
+	if emotionLabel != "" {
+		check(emotionLabel, emotionScores)
+	}
+
+	return bestEmoji
 }
 
 // emojiHateThresholds maps the hate label to descending (threshold, emoji) pairs.

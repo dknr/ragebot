@@ -46,30 +46,34 @@ func TestIronyInference(t *testing.T) {
 	}
 }
 
-func TestEmojiForEmotion(t *testing.T) {
+func TestEmojiForUnified(t *testing.T) {
 	tests := []struct {
-		label    string
-		prob     float32
-		wantEmoji string
+		name         string
+		sentLabel    string
+		sentScores   []float32
+		ironyScore   float32
+		emoLabel     string
+		emoScores    []float32
+		wantEmoji    string
 	}{
-		{"anger", 0.96, "🤬"},
-		{"anger", 0.90, "😡"},
-		{"anger", 0.81, "😠"},
-		{"anger", 0.79, ""},
-		{"joy", 0.95, "😂"},
-		{"joy", 0.90, "🥳"},
-		{"joy", 0.81, "😊"},
-		{"joy", 0.79, ""},
-		{"sadness", 0.95, "😭"},
-		{"fear", 0.90, "😨"},
-		{"surprise", 0.85, "😲"},
-		{"love", 0.82, "💕"},
-		{"unknown", 0.99, ""},
+		// Sentiment wins
+		{"high positive", "positive", []float32{0.05, 0.0, 0.96}, 0.1, "joy", []float32{0.1, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}, "🎉"},
+		// Emotion wins over sentiment when higher
+		{"emotion beats sentiment", "positive", []float32{0.05, 0.0, 0.80}, 0.1, "anger", []float32{0.92, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}, "😡"},
+		// Irony wins
+		{"high irony", "neutral", []float32{0.0, 0.90, 0.1}, 0.97, "sadness", []float32{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.90, 0.0, 0.0}, "😏"},
+		// Emotion anger beats irony
+		{"anger beats irony", "positive", []float32{0.0, 0.0, 0.90}, 0.94, "anger", []float32{0.96, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}, "🤬"},
+		// No threshold met
+		{"no threshold", "negative", []float32{0.70, 0.0, 0.0}, 0.5, "sadness", []float32{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.60, 0.0, 0.0}, ""},
+		// Neutral sentiment
+		{"neutral", "neutral", []float32{0.0, 0.91, 0.0}, 0.0, "joy", []float32{0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}, "😐"},
 	}
 	for _, tt := range tests {
-		got := emojiForEmotion(tt.label, tt.prob)
+		got := emojiForUnified(tt.sentLabel, tt.sentScores, tt.ironyScore, tt.emoLabel, tt.emoScores)
 		if got != tt.wantEmoji {
-			t.Errorf("emojiForEmotion(%q, %.2f) = %q, want %q", tt.label, tt.prob, got, tt.wantEmoji)
+			t.Errorf("%s: emojiForUnified(%q, %v, %.2f, %q, %v) = %q, want %q",
+				tt.name, tt.sentLabel, tt.sentScores, tt.ironyScore, tt.emoLabel, tt.emoScores, got, tt.wantEmoji)
 		}
 	}
 }

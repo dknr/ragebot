@@ -69,11 +69,12 @@ func main() {
 		evtLog.Any("content", evt.Content.Raw).Msg("Received event")
 	})
 
-	// Run sentiment + irony analysis on every incoming message, log both, and
-	// react with an emoji when a confidence clears a threshold. Irony takes
-	// priority over sentiment. OnMessage skips our own sends so we do not
-	// re-analyze what we said. Matrix allows multiple reactions per event, so
-	// lizard and neat messages still get analyzed.
+	// Run sentiment + irony + emotion analysis on every incoming message, log
+	// all scores, and react with the single best emoji when any confidence
+	// clears a threshold. Irony and all emotion labels compete with sentiment
+	// on equal footing. OnMessage skips our own sends so we do not re-analyze
+	// what we said. Matrix allows multiple reactions per event, so lizard,
+	// neat, and hate still get analyzed independently.
 	bot.OnMessage(func(ctx context.Context, evt *event.Event) {
 		body := evt.Content.AsMessage().Body
 		if body == "" {
@@ -97,23 +98,37 @@ func main() {
 		} else {
 			ironyScore = irony.Scores[1]
 		}
+		emotion, eerr := senti.classifyEmotions(body)
+		var emotionLabel string
+		var emotionScores []float32
+		if eerr != nil {
+			log.Error().Err(eerr).
+				Stringer("room_id", evt.RoomID).
+				Stringer("event_id", evt.ID).
+				Msg("Emotion analysis failed, degrading to sentiment+irony")
+		} else {
+			emotionLabel = emotion.Label
+			emotionScores = emotion.Scores
+		}
 		log.Info().
-			Str("label", res.Label).
-			Float32("confidence", res.Confidence).
-			Any("scores", res.Scores).
-			Int("tokens", res.Tokens).
-			Float64("elapsed_ms", res.ElapsedMS).
+			Str("sentiment_label", res.Label).
+			Float32("sentiment_confidence", res.Confidence).
+			Any("sentiment_scores", res.Scores).
+			Int("sentiment_tokens", res.Tokens).
+			Float64("sentiment_elapsed_ms", res.ElapsedMS).
 			Str("irony_label", irony.Label).
 			Float32("irony_score", ironyScore).
+			Str("emotion_label", emotionLabel).
+			Any("emotion_scores", emotionScores).
 			Stringer("room_id", evt.RoomID).
 			Stringer("event_id", evt.ID).
-			Msg("Sentiment analysis")
-		if emoji := emojiForSentiment(res.Label, res.Confidence, ironyScore); emoji != "" {
+			Msg("Sentiment/irony/emotion analysis")
+		if emoji := emojiForUnified(res.Label, res.Scores, ironyScore, emotionLabel, emotionScores); emoji != "" {
 			log.Debug().
 				Str("emoji", emoji).
 				Stringer("room_id", evt.RoomID).
 				Stringer("event_id", evt.ID).
-				Msg("Sending sentiment reaction")
+				Msg("Sending unified reaction")
 			if _, err := bot.Client().SendReaction(ctx, evt.RoomID, evt.ID, emoji); err != nil {
 				log.Error().Err(err).Stringer("room_id", evt.RoomID).Stringer("event_id", evt.ID).Msg("Failed to send reaction")
 			}
@@ -150,45 +165,6 @@ func main() {
 			Msg("Sending neat GIF")
 		if err := sendNeatGif(ctx, bot.Client(), evt.RoomID); err != nil {
 			log.Error().Err(err).Stringer("room_id", evt.RoomID).Stringer("event_id", evt.ID).Msg("Failed to send neat GIF")
-		}
-	})
-
-	// Run emotion analysis on every incoming message, log the 11-class
-	// probabilities, and react with the highest-scoring emotion emoji when it
-	// clears the threshold. OnMessage skips our own sends to avoid reacting to
-	// ourselves.
-	bot.OnMessage(func(ctx context.Context, evt *event.Event) {
-		body := evt.Content.AsMessage().Body
-		if body == "" {
-			return
-		}
-		res, err := senti.classifyEmotions(body)
-		if err != nil {
-			log.Error().Err(err).
-				Stringer("room_id", evt.RoomID).
-				Stringer("event_id", evt.ID).
-				Msg("Emotion analysis failed")
-			return
-		}
-		emojis := emojiForEmotion(res.Label, res.Confidence)
-		log.Info().
-			Str("label", res.Label).
-			Float32("confidence", res.Confidence).
-			Any("scores", res.Scores).
-			Int("tokens", res.Tokens).
-			Float64("elapsed_ms", res.ElapsedMS).
-			Stringer("room_id", evt.RoomID).
-			Stringer("event_id", evt.ID).
-			Msg("Emotion analysis")
-		if emojis != "" {
-			log.Debug().
-				Str("emoji", emojis).
-				Stringer("room_id", evt.RoomID).
-				Stringer("event_id", evt.ID).
-				Msg("Sending emotion reaction")
-			if _, err := bot.Client().SendReaction(ctx, evt.RoomID, evt.ID, emojis); err != nil {
-				log.Error().Err(err).Stringer("room_id", evt.RoomID).Stringer("event_id", evt.ID).Msg("Failed to send emotion reaction")
-			}
 		}
 	})
 
