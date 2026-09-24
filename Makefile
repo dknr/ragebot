@@ -23,7 +23,7 @@ TOK_MOD   := $(shell go env GOMODCACHE)/github.com/daulet/tokenizers@v1.27.0
 
 all: build
 
-build: $(BLOBS)/model.onnx.zst $(BLOBS)/emotion_int8.onnx.zst $(BLOBS)/irony.onnx.zst $(BLOBS)/tokenizer.json.zst $(BLOBS)/ort.so.zst libtokenizers.a
+build: $(BLOBS)/model.onnx $(BLOBS)/emotion_int8.onnx $(BLOBS)/irony.onnx $(BLOBS)/tokenizer.json $(BLOBS)/ort.so libtokenizers.a
 	CGO_LDFLAGS="-L$(CURDIR)" go build -tags goolm -o $(BIN) .
 
 run: build
@@ -57,26 +57,26 @@ ort: $(WORK)/ort.so
 $(WORK)/ort.so: $(PY) scripts/fetch_ort.py
 	$(PY) scripts/fetch_ort.py --out $(WORK) --cache $(WORK)
 
-## Compress build artifacts into blobs/ for go:embed.
-$(BLOBS)/model.onnx.zst: $(WORK)/model_int8.onnx
+## Copy build artifacts into blobs/ for go:embed (embedded raw, not compressed).
+$(BLOBS)/model.onnx: $(WORK)/model_int8.onnx
 	mkdir -p $(BLOBS)
-	zstd -f -19 -q $< -o $@
+	cp -f $< $@
 
-$(BLOBS)/emotion_int8.onnx.zst: $(WORK)/emotion_int8.onnx
+$(BLOBS)/emotion_int8.onnx: $(WORK)/emotion_int8.onnx
 	mkdir -p $(BLOBS)
-	zstd -f -19 -q $< -o $@
+	cp -f $< $@
 
-$(BLOBS)/irony.onnx.zst: $(WORK)/irony_int8.onnx
+$(BLOBS)/irony.onnx: $(WORK)/irony_int8.onnx
 	mkdir -p $(BLOBS)
-	zstd -f -19 -q $< -o $@
+	cp -f $< $@
 
-$(BLOBS)/tokenizer.json.zst: $(WORK)/tokenizer.json
+$(BLOBS)/tokenizer.json: $(WORK)/tokenizer.json
 	mkdir -p $(BLOBS)
-	zstd -f -19 -q $< -o $@
+	cp -f $< $@
 
-$(BLOBS)/ort.so.zst: $(WORK)/ort.so
+$(BLOBS)/ort.so: $(WORK)/ort.so
 	mkdir -p $(BLOBS)
-	zstd -f -19 -q $< -o $@
+	cp -f $< $@
 
 ## Build libtokenizers.a from the daulet/tokenizers Rust crate.
 libtokenizers.a:

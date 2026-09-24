@@ -3,40 +3,38 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"os"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
 	_ "embed"
 
 	tok "github.com/daulet/tokenizers"
-	"github.com/klauspost/compress/zstd"
 	ort "github.com/yalue/onnxruntime_go"
 	"golang.org/x/sys/unix"
 )
 
-// The sentiment model, tokenizer, and ONNX Runtime shared library are embedded
-// as compressed blobs. go:embed requires them to live next to this file, so
-// blobs/ holds them. Everything is regenerable via the Makefile.
+// The sentiment, irony, and emotion models, the tokenizer, and the ONNX
+// Runtime shared library are embedded raw. go:embed requires them to live
+// next to this file, so blobs/ holds them. Everything is regenerable via the
+// Makefile.
 //
-//go:embed blobs/model.onnx.zst
-var modelZst []byte
+//go:embed blobs/model.onnx
+var modelONNX []byte
 
-//go:embed blobs/irony.onnx.zst
-var ironyZst []byte
+//go:embed blobs/irony.onnx
+var ironyONNX []byte
 
-//go:embed blobs/emotion_int8.onnx.zst
-var emotionZst []byte
+//go:embed blobs/emotion_int8.onnx
+var emotionONNX []byte
 
-//go:embed blobs/tokenizer.json.zst
-var tokenizerZst []byte
+//go:embed blobs/tokenizer.json
+var tokenizerJSON []byte
 
-//go:embed blobs/ort.so.zst
-var ortSoZst []byte
+//go:embed blobs/ort.so
+var ortSo []byte
 
 // labels matches the model's logits column order (negative, neutral, positive).
 var labels = []string{"negative", "neutral", "positive"}
@@ -66,19 +64,6 @@ type analyzer struct {
 	emotionSess *ort.DynamicAdvancedSession
 	sessOpts    *ort.SessionOptions
 	maxTokens   int
-}
-
-func decompress(z []byte) []byte {
-	r, err := zstd.NewReader(strings.NewReader(string(z)))
-	if err != nil {
-		panic(err)
-	}
-	defer r.Close()
-	out, err := io.ReadAll(r)
-	if err != nil {
-		panic(err)
-	}
-	return out
 }
 
 // memfdWrite puts data in an anonymous in-RAM file and returns a path dlopen
@@ -123,9 +108,9 @@ func softmax(in []float32) []float32 {
 // startup; the returned analyzer owns the ORT environment and tokenizer.
 func newAnalyzer(maxTokens int) (*analyzer, error) {
 	// The ORT shared library is dlopen'd, never linked, so it must live at a
-	// path. Decompress the embedded blob into an anonymous memfd and hand that
-	// path to dlopen.
-	soPath, err := memfdWrite("libonnxruntime", decompress(ortSoZst))
+	// path. Put the embedded library in an anonymous memfd and hand that path
+	// to dlopen.
+	soPath, err := memfdWrite("libonnxruntime", ortSo)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +119,7 @@ func newAnalyzer(maxTokens int) (*analyzer, error) {
 		return nil, err
 	}
 
-	tk, err := tok.FromBytes(decompress(tokenizerZst))
+	tk, err := tok.FromBytes(tokenizerJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -143,20 +128,29 @@ func newAnalyzer(maxTokens int) (*analyzer, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := sessOpts.SetIntraOpNumThreads(4); err != nil {
+		return nil, err
+	}
+	if err := sessOpts.SetInterOpNumThreads(1); err != nil {
+		return nil, err
+	}
+	if err := sessOpts.SetCpuMemArena(false); err != nil {
+		return nil, err
+	}
 
-	sess, err := ort.NewDynamicAdvancedSessionWithONNXData(decompress(modelZst),
+	sess, err := ort.NewDynamicAdvancedSessionWithONNXData(modelONNX,
 		[]string{"input_ids", "attention_mask"}, []string{"logits"}, sessOpts)
 	if err != nil {
 		return nil, err
 	}
 
-	ironySess, err := ort.NewDynamicAdvancedSessionWithONNXData(decompress(ironyZst),
+	ironySess, err := ort.NewDynamicAdvancedSessionWithONNXData(ironyONNX,
 		[]string{"input_ids", "attention_mask"}, []string{"logits"}, sessOpts)
 	if err != nil {
 		return nil, err
 	}
 
-	emotionSess, err := ort.NewDynamicAdvancedSessionWithONNXData(decompress(emotionZst),
+	emotionSess, err := ort.NewDynamicAdvancedSessionWithONNXData(emotionONNX,
 		[]string{"input_ids", "attention_mask"}, []string{"logits"}, sessOpts)
 	if err != nil {
 		return nil, err

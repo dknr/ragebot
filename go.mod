@@ -4,7 +4,6 @@ go 1.27.0
 
 require (
 	github.com/daulet/tokenizers v1.27.0
-	github.com/klauspost/compress v1.20.0
 	github.com/rs/zerolog v1.35.1
 	github.com/yalue/onnxruntime_go v1.36.0
 	golang.org/x/sys v0.48.0
@@ -12,7 +11,7 @@ require (
 	ragecore v0.0.0-20260917221726-a7f6593cc1a3
 )
 
-replace ragecore => github.com/dknr/ragecore v0.0.0-20260917221726-a7f6593cc1a3
+replace ragecore => ../ragecore
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect

@@ -16,7 +16,7 @@ A Matrix bot client built on [mautrix-go](https://maunium.net/go/mautrix) that:
 ## Building
 
 The binary embeds the sentiment, emotion, and irony models, the tokenizer, and the ONNX Runtime shared
-library as compressed blobs (`blobs/*.zst`), so `ragebot` is a single self-contained binary.
+library (`blobs/*.onnx`, `blobs/tokenizer.json`, `blobs/ort.so`), so `ragebot` is a single self-contained binary.
 
 mautrix-go ships two olm implementations: the C `libolm` (needs the olm library) and the pure Go
 `goolm`. The build uses the `goolm` tag to avoid the cgo dependency for olm. The sentiment
