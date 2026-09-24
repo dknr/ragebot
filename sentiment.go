@@ -128,13 +128,22 @@ func newAnalyzer(maxTokens int) (*analyzer, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := sessOpts.SetIntraOpNumThreads(4); err != nil {
+	// The int8 models are tiny enough that parallelizing across more threads
+	// than physical cores adds pure overhead (oversubscription, context
+	// switches) and keeps both cores hot after the compute finishes. Never
+	// exceed the core count; on a 2-core prod box this is 2. Drop to 1 if the
+	// peak CPU during inference is itself a concern (the reference gonnx
+	// binary defaults to 1).
+	if err := sessOpts.SetIntraOpNumThreads(runtime.NumCPU()); err != nil {
 		return nil, err
 	}
 	if err := sessOpts.SetInterOpNumThreads(1); err != nil {
 		return nil, err
 	}
-	if err := sessOpts.SetCpuMemArena(false); err != nil {
+	// Keep the ORT memory arena (its default). Disabling it made every
+	// inference malloc/munmap the 357MB emotion model's activation buffers,
+	// producing a burst of page-mapping work after the compute.
+	if err := sessOpts.SetCpuMemArena(true); err != nil {
 		return nil, err
 	}
 

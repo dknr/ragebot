@@ -1,13 +1,12 @@
 [Unit]
-Description=RageBot Telegram Message Logger
+Description=RageBot Matrix Chat Reactor
 After=network.target
 
 [Service]
 Type=simple
-User=root
-WorkingDirectory={{RAGEBOT_DIR}}
-Environment=PATH={{VENV_PATH}}/bin
-ExecStart={{VENV_PATH}}/bin/python main.py
+User=ragebot
+WorkingDirectory=/srv/ragebot
+ExecStart=/usr/local/bin/ragebot -config /etc/ragebot/config.json
 Restart=always
 RestartSec=10
 StandardOutput=journal

@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"regexp"
@@ -36,6 +38,18 @@ func main() {
 	log := zerolog.New(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
 		w.TimeFormat = time.StampMilli
 	})).With().Timestamp().Logger()
+
+	// Opt-in pprof for diagnosing CPU hot spots in prod. Off by default so no
+	// listener is exposed; set RAGEBOT_PPROF (e.g. "127.0.0.1:6060") and then
+	// capture with: go tool pprof -http :8080 http://127.0.0.1:6060/debug/pprof/profile?seconds=30
+	if pprofAddr := os.Getenv("RAGEBOT_PPROF"); pprofAddr != "" {
+		go func() {
+			log.Warn().Str("addr", pprofAddr).Msg("pprof listening")
+			if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+				log.Error().Err(err).Msg("pprof server failed")
+			}
+		}()
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -118,8 +132,10 @@ func main() {
 			Float64("sentiment_elapsed_ms", res.ElapsedMS).
 			Str("irony_label", irony.Label).
 			Float32("irony_score", ironyScore).
+			Float64("irony_elapsed_ms", irony.ElapsedMS).
 			Str("emotion_label", emotionLabel).
 			Any("emotion_scores", emotionScores).
+			Float64("emotion_elapsed_ms", emotion.ElapsedMS).
 			Stringer("room_id", evt.RoomID).
 			Stringer("event_id", evt.ID).
 			Msg("Sentiment/irony/emotion analysis")
