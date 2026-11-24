@@ -128,13 +128,12 @@ func newAnalyzer(maxTokens int) (*analyzer, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The int8 models are tiny enough that parallelizing across more threads
-	// than physical cores adds pure overhead (oversubscription, context
-	// switches) and keeps both cores hot after the compute finishes. Never
-	// exceed the core count; on a 2-core prod box this is 2. Drop to 1 if the
-	// peak CPU during inference is itself a concern (the reference gonnx
-	// binary defaults to 1).
-	if err := sessOpts.SetIntraOpNumThreads(runtime.NumCPU()); err != nil {
+	// Cap ORT at 1 thread. On a 2-core prod box, 2 threads peg both cores
+	// for several seconds after each inference (the ORT thread pool doesn't
+	// immediately sleep). 1 thread keeps CPU to ~50% peak and avoids the
+	// post-inference spin entirely, while keeping inference fast for these
+	// tiny int8 models.
+	if err := sessOpts.SetIntraOpNumThreads(1); err != nil {
 		return nil, err
 	}
 	if err := sessOpts.SetInterOpNumThreads(1); err != nil {

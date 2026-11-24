@@ -1,0 +1,3 @@
+[submodule "libs/ragecore"]
+	path = libs/ragecore
+	url = https://github.com/dknr/ragecore
